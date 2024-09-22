@@ -1,0 +1,12 @@
+Data citation:
+
+NOAA/CDO, 2023: GHCND Raw Temperature Data via NOAA/National Climatic Data Center, accessed 2024-01-27 from: https://www.ncdc.noaa.gov/cdo-web/. Subsets used: 
++ Richmond International Airport, Richmond, VA, USA; 01-March-1939 to 31-December-2023
+
+This dataset contains weather variables for:
+-STATION: NOAA weather station coade
+-NAME: Longform weather station name
+-DATE: Date of observation in YYYY-MM-DD
+-PRCP: Daily total precipitation in inches
+-TMAX: Daily maximum temperature in °F
+-TMIN: Daily minimum temperature in °F

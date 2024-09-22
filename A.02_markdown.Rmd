@@ -1,0 +1,244 @@
+---
+title: "A.02 Markdown"
+author: "Oropendola"
+date: '2024-01-30'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+
+### Question 4 ___ / 4 points
+
+*In the space below the rubric, provide a complete data citation so that anyone would be able to obtain the same dataset and produce similar results.*
+
+**Preceptor Rubric**
+
+  * ___ / 1 point: Source (author or agency)
+  * ___ / 1 point: Location & dates downloaded
+  * ___ / 1 point: Date of download
+  * ___ / 1 point: URL of data source
+  
+--------
+NOAA  
+Downloaded Woodstock, VA (Station GHCND:USC00449263) from 1950-01-01 to 2022-12-31  
+Date of downlaod: 2024-09-03  
+https://www.ncdc.noaa.gov/cdo-web/search  
+
+_______
+
+\newpage
+
+### Question 5: ___ / 2 points
+
+*In the R chunk below, require in the packages necessary and read in your unique weather data set.*
+
+**Preceptor Rubric**
+
+  * ___ / 1 point: all packages needed
+  * ___ / 1 point: named data.frame created from csv file with relevant arguments
+
+```{r question 5, echo = T, warning = F, message = F}
+require(lubridate)
+require(tidyverse)
+Woodstock_Data <- read.csv("NOAAWoodstock.csv",
+                      stringsAsFactors = T)
+#summary(Woodstock_Data)
+#str(Woodstock_Data)
+```
+
+______
+
+\newpage
+
+### Question 6: ___ / 3 points
+
+*In the R chunk below, format your date column AND create new columns that hold the values for month and year. Be sure run separate `summary()` commands for each of these three columns to demonstrate that your code works.*
+
+**Preceptor Rubric**
+
+  * ___ / 1 point: date assigned & checked
+  * ___ / 1 point: year created & checked
+  * ___ / 1 point: month created & checked
+
+```{r question 6, echo = T}
+Woodstock_Data$DATE <- ymd(Woodstock_Data$DATE)
+summary(Woodstock_Data$DATE)
+str(Woodstock_Data$DATE)
+
+Woodstock_Data$YEAR <- year(Woodstock_Data$DATE)
+summary(Woodstock_Data$YEAR)
+
+Woodstock_Data$MONTH <- month(Woodstock_Data$DATE)
+summary(Woodstock_Data$MONTH)
+```
+
+
+______
+
+\newpage
+
+
+### Question 7: ___ / 3 points
+
+*In the R-chunk below, extract a new data.frame of the twenty-year baseline based on what year your data starts. Check your year column with a summary to make certain the code worked.* 
+
+**Preceptor Rubric**
+
+  * ___ / 2 points: twenty-year period extracted as baseline
+  * ___ / 1 point: baseline time checked
+
+```{r question 7, echo = T}
+Woodstock_Base <- Woodstock_Data %>%
+  filter(YEAR <=1970)
+summary(Woodstock_Base)
+                           
+``` 
+______
+
+\newpage
+
+
+### Question 8: ___ / 5 points
+
+*In the R-chunk below, create a data.frame with monthly norms of maximum temperature for your baseline period. Graph the results as column ggplot to make certain the code works and the values are reasonable.* 
+
+**Preceptor Rubric**
+
+  * ___ / 2 points: monthly norm data.frame created
+  * ___ / 2 points: norm output checked with correct ggplot type and data layout
+  * ___ / 1 point: ggplot labels
+
+```{r question 8, echo = T}
+Woodstock_Norms <- Woodstock_Base %>%
+  group_by(MONTH) %>%
+  summarise(AVG_TMAX = mean(TMAX, na.rm = T))
+  
+ggplot(Woodstock_Norms,
+       aes(x = as.factor(MONTH),
+           y = AVG_TMAX))+
+  geom_col(alpha = 0.8,
+           fill = "lightblue",
+           color = "darkseagreen")+
+  theme_minimal()+
+  labs(x = "Months",
+       y = "Average Monthly Maximum Temperatures (F°)",
+       title = "Monthly Temperature Normals in Woodstock, VA")
+
+```
+
+______
+
+\newpage
+
+
+### Question 9: ___ / 5 points
+
+*In the R-chunk below, combine your temperature norms with your full weather dataset. Create new column that calculates the temperature anomaly, and plot the values as a histogram with ggplot to make certain the distribution is reasonable.* 
+
+**Preceptor Rubric**
+
+  * ___ / 2 points: weather and norm data.frames combined
+  * ___ / 1 point: anomaly column created & calculated
+  * ___ / 1 point: histogram created in ggplot2
+  * ___ / 1 point: ggplot labels
+
+```{r question 9, echo = T}
+Woodstock_Full <- full_join(Woodstock_Data, Woodstock_Norms,
+                            by = "MONTH")
+#summary(Woodstock_Full)
+
+Woodstock_Full$ANOMALY <- Woodstock_Full$TMAX - Woodstock_Full$AVG_TMAX
+#summary(Woodstock_Full)
+
+ggplot(Woodstock_Full,
+       aes(x = ANOMALY))+
+  geom_histogram(bins = 30,
+                 fill = "rosybrown",
+                 color = "black",
+                 alpha = 0.8)+
+  labs(x = "Anomaly",
+       y = "Frequency",
+       title = "Distribution of Temperature Anomalies")
+```
+
+______
+
+\newpage
+
+
+### Question 10: ___ / 2 points
+
+*In the R-chunk below, create a data.frame that shows the average yearly anomaly.*
+
+**Preceptor Rubric**
+
+  * ___ / 2 points: data.frame of average yearly anomalies created.
+
+```{r question 10, echo = T}
+Woodstock_Yearly <- Woodstock_Full %>%
+  drop_na(ANOMALY) %>%
+  group_by(YEAR) %>%
+  summarise(AVG_ANOM = mean(ANOMALY, na.rm = T))
+#check Woodstock_Yearly in the Environment
+```
+
+______
+
+\newpage
+
+
+### Question 11: ___ / 10 points
+
+*In the R-chunk below, create a fully-formatted ggplot using your yearly anomaly data.frame, with year on the x-axis, and temperature anomalies on the y-axis as columns with a "fill" color gradient that reinforces variation. Be sure to label all parts of your graph, and* **include the location of the weather data in the graph title**. 
+
+**Preceptor Rubric**
+
+  * ___ / 2 points: column plot
+  * ___ / 2 points: correct x & y axis layout
+  * ___ / 2 points: fill reinforces anomaly
+  * ___ / 2 points: axis and fill labels
+  * ___ / 2 points: plot title with location
+
+```{r question 11, echo = T}
+ggplot(Woodstock_Yearly,
+       aes(x = YEAR,
+           y = AVG_ANOM,
+           fill = AVG_ANOM))+
+  geom_col(alpha = 0.8)+
+  labs(x = "Year",
+       y = "Average Temperature Anomaly",
+       title = "Climate Trends in Woodstock, VA",
+       fill = "°F")+
+  scale_fill_gradient2(low = "#BACDDB",
+                       mid = "#E6BAA3",
+                      high = "#C63C51")+
+  theme_bw()
+  
+```
+
+______
+
+\newpage
+
+
+### Question 12: ___ / 6 points
+
+*In 3-4 sentences, describe in the space below the rubric what (if any) trends in climate you see in the figure you created for the previous question. Does your location follow global trends of increasing temperature? Are the extreme cold years of similar absolute magnitude to extreme warm years? In your life time, how many years have been cooler vs. warmer than the historic norm?*
+
+**Instructor Rubric**
+
+  * ___ / 1 points: Assessment of change reflects graph
+  * ___ / 1 points: Interpreted in light of global trends
+  * ___ / 1 points: Magnitude of cold vs. warm years
+  * ___ / 1 points: Conditions during your lifetime
+  * ___ / 2 points: Spelling, punctuation, grammar
+
+
+Historically, Woodstock's climate has been relatively stable with the occasional extreme warm years. Starting around 1995, the area has had a trend of extremely cold years of similar magnitude to warm years. Within my life time, there have been six extremely cooler years and no extremely warm years compared to the historic norm. This does not follow the global climate trends as most regions of the world have been experiencing warmer climate trends.

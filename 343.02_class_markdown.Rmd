@@ -1,0 +1,246 @@
+---
+title: "343.02 Class Markdown: Data Wrangling"
+author: "Oropendola"
+date: "2024-09-03"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Mission overview
+
+Today, we're going to complete a demonstration of using R to wrangle 70 years of weather data into a clear climate variable: temperature anomaly!
+
+We want to compare temperature increases (or decreases) across time. To do this we must:
+
+1. Extract a **baseline** period early in our dataset from "before" climate change likely accelerated.
+2. Establish **norms**: average temperature values for units of time within that baseline (months or weeks).
+3. Subtract the *norms* from the *observed temps* to calculate **anomalies**: the degrees a day was above or below a historic average.
+4. Plot these anomalies to look for **trends**, determining the best format to visualize these trends, considering:
+   + Plot type (point, box, column) & reinforcing aesthetics (color/fill).
+   + Whether to view as individual day observations or summarize by months or years.
+
+For a more in-depth explanation of anomalies, check out [this NOAA reference](https://www.ncei.noaa.gov/access/monitoring/dyk/anomalies-vs-temperature).
+
+But before we can get to that, we need to setup our RMarkdown with packages & data.
+
+## 0: Setup
+
+To keep things *tidy* we like to begin our Markdown loading in all of the packages we'll need. Because it comes with a number of `messages` about the packages in `tidyverse` and `warnings` about conflicts, I've **suppressed them** at the start of the R chunk.
+
+```{r package-loading, echo=TRUE, warning=FALSE, message=FALSE}
+# require in our packages
+require(lubridate)
+require(tidyverse)
+```
+
+Then, we will want to read in and explore our data.
+
+```{r data load and explore it}
+# read in the data
+rva <- read.csv("climate_data.csv",
+                stringsAsFactors = T)
+# What are the variable names & data types?
+summary(rva)
+str(rva) #str shows what is a factor, date should NOT be a factor. Use the lubricate package to change this
+```
+
+Just like last class, you can see we have daily weather records, for which the time variable needs to be assigned. Unlike last class, all of the column names are in CAPSLOCK, so we'll have type with caution!
+
+```{r reformat date}
+# reformat date to be a date; date should NOT be a factor. Use the lubricate package to change this
+rva$DATE <- ymd(rva$DATE)
+summary(rva$DATE)
+str(rva$DATE)
+```
+
+We know that we'll be asking questions about the average temperature by *MONTH* and looking for changes by *YEAR*, so we should also create new columns that hold that information in our data.frame.
+
+Again, mind case sensitivity; we may choose to keep the CAPSLOCK formatting for column names, but the `lubridate` commands are lowercase.
+
+```{r create year and month columns}
+# Create year column; type the data frame's name, dollar sign, what ever name you want
+rva$YEAR <- year(rva$DATE) #assign operator (<-), the year lubricate command, where you want the R to find the year within the data frame, in this case its in the DATE column
+summary(rva$YEAR)
+# Create month column
+rva$MONTH <-month(rva$DATE)
+head(rva$MONTH)
+summary(rva$MONTH) #check to see if the column has been made
+```
+
+Our data is now setup for some wrangling!
+
+## 1: Extract a baseline
+
+To see if temperatures are shifting, we need to first establish a baseline when we think the effects of human-caused climate change were absent, or at least less pronounced. We need enough years to create average estimates to avoid comparing contemporary conditions to a potential historic extreme; 20-30 years should be enough. 
+
+Ideally, we would pre-Industrial records…but those are hard to come by for most locations. As such, we need to see when our dataset begins, and hope that it does not overlap too much with the CO~2~ inundation of the globalized 1970s, when levels exceeded 325ppm for the first time in over a million years.
+
+```{r year range}
+# what years do we have in our data.frame?
+range(rva$YEAR)
+# are there any data gaps? how many are there? You can graph the data to see if there are any holes
+plot(x = rva$DATE,
+     y = rva$TMAX,
+     xlab = "DATE",
+     ylab = "Max Temperature (F)")# as you can see in the graph, there is a gap. you are going to want to set your baseline to avoid those gaps
+
+```
+
+Provided we have a runway, we can then create a baseline of the first twenty-five years using ` %>% filter()`.
+
+```{r create baseline data.frame}
+# Name your data.frame wisely! pipe operator (ctr + shift + m)
+rva_base <-rva %>% # making a new fata fram from rva
+  filter(YEAR <=1964) #1964 is 25 years ahead
+# See if it worked!
+summary(rva_base)
+```
+
+## 2: Establish temperature norms
+
+What we consider as an abnormally hot or cold day depends on the time of year: we might consider a high of 72°F weirdly warm on January 1st, but surprisingly mild on August 1st. Thus, we will need to establish what is "normal" for a month during our baseline years.
+
+We will make a new data.frame with only two columns: one for MONTH, the other for average maximum temperature during that month. We have to connect the command to group data by month value before we summarize mean maximum temperature.
+
+```{r create norm data.frame}
+# new data.frame for norms
+rva_norm <- rva_base %>%
+ group_by(MONTH) %>% #want the average for each month
+  summarise(AVG_TMAX = #new column
+              mean(TMAX, na.rm = T)) #average of TMAX
+               
+# Check out the data.frame to see if it worked.
+ggplot(rva_norm,
+       aes(x = as.factor( MONTH), #treat the numbered months as a factor
+           y = AVG_TMAX))+
+  geom_col(alpha = 0.8,
+           fill = "black",
+           color = "cornflowerblue")+
+  labs(x = "Month",
+       y = "Average Max Temperatures (F)",
+       title = "Monthly Normals")
+# Plot the data.frame to see if the VALUES make sense
+
+```
+
+If the values look reasonable, we are on track to proceed to step 3!
+
+## 3: Combine and subtract!
+
+Now that we know what was "normal" for each month historically, we need to integrate those estimates with the entire weather history. We will `join` our original `ric` data.frame with the newly-created `norm`.
+
+There are several ways to join different data.frames in dplyr. Because we want all records preserved, we will be using the `full_join()` function (instead of `left_join()` or `right_join()`, which we may use another day). In all of these functions, we have to specify three arguments:
+
+ * The first data.frame, or data.frame **x**; `x = ric`
+ * The second or **y** data.frame; `y = norm`
+ * The column or columns x & y have in common to join them **by**; here, `by = "MONTH"`
+
+For a join to work, we need to tell what column or columns the data.frames have in common, so it can align the rows properly. We do this with the argument `by = `; in this case, the two data.frames have `MONTH` in common.
+
+```{r join daily and norm data.frames}
+# create a new daily data.frame
+rva_full <- full_join(rva,rva_norm,
+                      by = "MONTH") 
+# did it work?# did it work?
+summary(rva_full)
+```
+
+Now we can do this simple arithmetic of anomalies: creating a column that show how much warmer or cooler a day was than the historic monthly norm.
+
+ANOMALY = TMAX - AVG_TMAX
+
+```{r calculate and check anomaly}
+# Create anomaly column
+rva_full$ANOMALY <- rva_full$TMAX - rva_full$AVG_TMAX
+# Did it work?
+summary(rva_full$ANOMALY)
+# Check the distribution of values graphically
+ggplot(rva_full,
+       aes(x = ANOMALY))+
+  geom_histogram(bins = 20,
+                 color = "black",
+                 fill = "darkseagreen",
+                 alpha = 0.8)
+```
+
+## 4: Plot & trend assessment
+
+Fantastic work! We now have daily temperature anomalies, which can may help us understand climate change in RVA. 
+
+Unfortunately, the *daily* data may not be the best scale on which to make these assessments -- after all, putting 27,000+ observations on a graph makes for a messy visualization.
+
+```{r plot daily anomalies}
+# daily climate anomaly plot
+ggplot(rva_full,
+       aes(x = DATE,
+           y = ANOMALY))+
+  geom_point(alpha = 0.8)+
+  labs(x = "Date",
+       y = "Temperature Anomaly (F)",
+       title = "Daily Temperature Anomalies" )
+```
+
+We need to complete one last wrangling to visualize the average anomaly by year. We can do this *because* our anomalies are on the same monthly scale. What command from `dplyr` should we use to average yearly anomalies?
+  
+```{r calculate mean yearly anomalies}
+# Create simple data of year and climate variables
+rva_yearly <- rva_full %>% 
+  drop_na(ANOMALY) %>% #gets rid of NA's, check rva_yearly in environment
+  group_by(YEAR) %>% #create column one
+  summarise(AVG_ANOM = mean(ANOMALY, #make column 2, name it, avg daily anomaly temps/year
+                            na.rm = T),
+            TOT_PRCP = sum(PRCP, 
+                           na.rn = T)) 
+```
+
+Finally, we have yearly data to plot! To make this visualization as effective as possible, we will want to:
+
+  1. Determine whether points or columns are more clearly demonstrate change (or the lack thereof).
+  2. Provide detailed, well-formatted labels, so the lay person will know what the graph is showing.
+  3. Reinforce variation in the height / y variable of our graph with color or fill.
+  
+```{r graph yearly anomalies}
+# Point version
+ggplot(rva_yearly,
+       aes(x = YEAR,
+           y = AVG_ANOM))+
+  geom_point(alpha = 0.8)+
+  labs (x = "Year",
+        y = "Average Anomaly",
+        title = "Average Yearly Anomaly in Richmond, VA" )
+# Column version
+ggplot(rva_yearly,
+       aes(x = YEAR,
+           y = AVG_ANOM,
+           fill = AVG_ANOM))+
+  geom_col(alpha = 0.8)+
+  labs(x = "Year",
+       y = "Avg. Temp. Anomaly",
+       title = "Climate Trends in Richmond, VA",
+       fill = "°F")+
+  scale_fill_gradient(low = "cornflowerblue",
+                      high = "lightpink")+
+   theme_linedraw()+
+  ylim(-4,4)
+ggplot(rva_yearly,
+       aes(x = YEAR,
+           y = AVG_ANOM,
+           fill = AVG_ANOM))+
+  geom_col(alpha = 0.8)+
+  labs(x = "Year",
+       y = "Avg. Temp. Anomaly",
+       title = "Climate Trends in Richmond, VA",
+       fill = "°F")+
+  scale_fill_gradient2(low = "cornflowerblue",
+                      mid = "lightgrey",
+                      high = "lightpink")+
+   theme_linedraw()+
+  ylim(-4,4)
+```
+  
+Based on what we see in our graph, is there evidence of climate change in Richmond? Is it warming or cooling? Are warm and cool years of equal magnitude, or do we see greater extremes in one versus the other?
